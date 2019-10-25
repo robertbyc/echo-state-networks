@@ -1,0 +1,85 @@
+clear all;
+NRMSEMIN=load('ErrorMIN.txt');
+for d=2:2
+for j=1:5
+    
+
+close all;
+clc;
+d
+nLayers         = 10;
+nInputDim       = 1;
+nOutputDim      = 1;
+nReservoirDim   = 10+0*floor(2*rand(1,nLayers));%[10,10,40,15,15,15,15,8,15,15,10,10,40,15,15,15,15,8,15,15];*ones(1,nLayers);%
+
+nSpectraRadius  = 0.1+0.0*rand(1,nLayers);%[0.09,0.89,0.59,0.39,0.09,0.19,0.39,0.59,0.79,0.09,0.09,0.89,0.59,0.39,0.09,0.19,0.39,0.59,0.79,0.09];
+nSparseDegree   = 0.2+0.0*rand(1,nLayers);%[0.15,0.5,0.5,0.3,0.5,0.5,0.15,0.15,0.3,0.15,0.15,0.5,0.5,0.3,0.5,0.5,0.15,0.15,0.3,0.15];
+StackedESN= BuildStackedESN(nLayers,nInputDim,nOutputDim,nReservoirDim,nSpectraRadius,nSparseDegree);
+%Acquire samples
+nSamNum=9500;
+nNeglectSampleNum=2500;
+fraction=7500/nSamNum;
+scalefactor=0.5;
+[Input_sequence_p,Output_sequence,nSamNum,PS]=generate_Smaples(nSamNum,0,0);
+train_x=Input_sequence_p(1:floor(nSamNum*fraction),:);
+train_y=Output_sequence(1:floor(nSamNum*fraction),:);
+test_x=Input_sequence_p(floor(nSamNum*fraction)+1:nSamNum,:);
+test_y=Output_sequence(floor(nSamNum*fraction)+1:nSamNum,:);
+% StackedESN1 = load('StackedESN.mat'); %
+% StackedESN  = StackedESN1.StackedESN;
+% for i=1:nLayers
+%     delayorder(i)=StackedESN{i}.delayorder;
+% end
+   delayorder=d+0*fix(2.2*((rand(nLayers,1))-0.5));
+
+  StackedESN=TrainStackedESN(train_x,train_y,StackedESN,nLayers,nNeglectSampleNum,delayorder,scalefactor);
+for i=1:nLayers
+    StackedESN{i}.InternalState= zeros(nReservoirDim(i),1);
+    StackedESN{i}.delayorder=delayorder(i);
+end
+% [StackedESN,PredictedOutput] = TestStackedESN(train_x,StackedESN,nLayers,0,delayorder,scalefactor);
+% figure(2);
+% plot(PredictedOutput,'b');
+% hold on;
+% plot(train_y,'r:');
+[StackedESN,PredictedOutput] = TestStackedESN(test_x,StackedESN,nLayers,0,delayorder,scalefactor);
+% figure(1);
+% plot(PredictedOutput,'r-o','LineWidth',2);
+% hold on;
+% plot(test_y,'b:x','LineWidth',2);
+% xlabel('time step k');
+% %ylabel('error');
+% 
+% set(gca,'FontSize',14,'FontName','TimeNewsRoman','FontWeight','bold');
+% set(get(gca,'YLabel'),'FontSize',14,'FontName','TimeNewsRoman','FontWeight','bold');
+% set(get(gca,'XLabel'),'FontSize',14,'FontName','TimeNewsRoman','FontWeight','bold');
+% set(gca,'linewidth',2);
+sz=size(test_y,1);
+PredictedError=(PredictedOutput(sz-999:sz)-test_y(sz-999:sz));
+PredictedNRMSE=sqrt(sum(PredictedError.^2)/(size(PredictedError,1)*var([test_y(sz-999:sz)])))
+if(PredictedNRMSE<NRMSEMIN)
+    delete('StackedESN.mat') 
+    save('StackedESN.mat','StackedESN') ;
+    NRMSEMIN=PredictedNRMSE;
+    fid=fopen('ErrorMIN.txt','w');
+    fprintf(fid,'%5.10f',NRMSEMIN);
+    fclose(fid);
+end
+% PredictedError=[PredictedOutput(84)-test_y(84),PredictedOutput(120)-test_y(120),PredictedOutput(200)-test_y(200)];
+% fid=fopen('PredictedError.txt','a+');
+% for i=1:size(PredictedError,2)
+% fprintf(fid,'%5.20f ',PredictedError(i));
+% end
+% fprintf(fid,'\r\n');
+% fclose(fid);
+max_Wout=max(abs(StackedESN{nLayers}.W_out))
+fid=fopen('NRMSED.txt','a+');
+fprintf(fid,'%5.0f ',max_Wout);
+fprintf(fid,'%5.10f',PredictedNRMSE);
+fprintf(fid,'\r\n');
+fclose(fid);
+end
+end
+% figure(2);
+% plot(PredictedError,'b');
+
